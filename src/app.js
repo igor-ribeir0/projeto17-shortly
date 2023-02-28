@@ -5,18 +5,24 @@ import joi from "joi";
 import { db } from "./config/dataBase.js";
 import bcrypt from "bcrypt";
 import { v4 as uuid } from 'uuid';
+import { nanoid } from "nanoid";
 
 /*{
-  "name": "Naruto",
-  "email": "naruto@gg.com",
-  "password": "narutinho",
-  "confirmPassword": "narutinho"
+  "name": "Razer",
+  "email": "razer@gg.com",
+  "password": "razer",
+  "confirmPassword": "razer"
+  "token": "3c7a3b7b-8c64-4304-bf95-fa82d2f599c7"
 }
 */
 
 dotenv.config();
 
 const app = express();
+
+app.use(express.json());
+app.use(cors());
+app.listen(process.env.PORT);
 
 const signInSchema = joi.object(
     {
@@ -34,9 +40,11 @@ const signUpSchema = joi.object(
     }
 );
 
-app.use(express.json());
-app.use(cors());
-app.listen(process.env.PORT);
+const urlSchema = joi.object(
+    {
+        url: joi.string().uri().required()
+    }
+);
 
 app.post("/signIn", async(req, res) => {
     const { email, password } = req.body;
@@ -115,6 +123,69 @@ app.post("/signUp", async(req, res) => {
         );
 
         res.sendStatus(201);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
+
+app.post("/urls/shorten", async(req, res) => {
+    const { url } = req.body;
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "");
+
+    if(!token) return res.sendStatus(401);
+
+    const urlTest = { url };
+    const validation = urlSchema.validate(urlTest, { abortEarly: true });
+
+    if(validation.error){
+        const error = validation.error.details;
+        return res.status(422).send(error);
+    }
+
+    try{
+        const sessionTest = await db.query(
+            `
+                SELECT * FROM sessions WHERE token = $1
+            `,
+            [token]
+        );
+        
+
+        if(sessionTest.rowCount === 0) return res.sendStatus(401);
+
+        const urlExist = await db.query(
+            `
+                Select * from urls WHERE url = $1
+            `,
+            [url]
+        );
+
+        if(urlExist.rowCount !== 0) return res.sendStatus(409);
+
+        const urlTable = await db.query(
+            `
+                SELECT * FROM urls
+            `
+        );
+
+        const shortUrl = nanoid(8);
+
+        await db.query(
+            `
+                INSERT INTO urls (url, "shortUrl")
+                VALUES ($1, $2)
+            `,
+            [url, shortUrl]
+        );
+
+        const urlBody = { 
+            id: urlTable.rowCount + 1,
+            shortUrl: shortUrl
+        };
+
+        res.status(201).send(urlBody);
     }
     catch(error){
         res.status(500).send(error.message);
