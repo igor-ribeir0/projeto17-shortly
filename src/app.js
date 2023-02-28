@@ -191,3 +191,29 @@ app.post("/urls/shorten", async(req, res) => {
         res.status(500).send(error.message);
     }
 });
+
+app.get("/urls/:id", async(req, res) => {
+    const { id } = req.params;
+
+    try{
+        const urlExist = await db.query(
+            `
+                SELECT * FROM urls WHERE id = $1
+            `,
+            [id]
+        );
+
+        if(urlExist.rowCount === 0) return res.sendStatus(404);
+
+        const urlBody = {
+            id: urlExist.rows[0].id,
+            shortUrl: urlExist.rows[0].shortUrl,
+            url: urlExist.rows[0].url
+        };
+
+        res.status(200).send(urlBody);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
