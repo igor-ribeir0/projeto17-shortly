@@ -155,42 +155,34 @@ app.post("/urls/shorten", async(req, res) => {
 
         if(sessionTest.rowCount === 0) return res.sendStatus(401);
 
-        const urlExist = await db.query(
-            `
-                Select * from urls WHERE url = $1
-            `,
-            [url]
-        );
-
-        if(urlExist.rowCount !== 0) return res.sendStatus(409);
-
-        const urlTable = await db.query(
-            `
-                SELECT * FROM urls
-            `
-        );
-
         const shortUrl = nanoid(8);
 
         await db.query(
             `
-                INSERT INTO urls (url, "shortUrl")
-                VALUES ($1, $2)
+                INSERT INTO urls ("userId", url, "shortUrl")
+                VALUES ($1, $2, $3)
             `,
-            [url, shortUrl]
+            [sessionTest.rows[0].userId, url, shortUrl]
+        );
+
+        const getUrl = await db.query(
+            `
+                SELECT * FROM urls WHERE url = $1;
+            `,
+            [url]
         );
 
         const urlBody = { 
-            id: urlTable.rowCount + 1,
+            id: getUrl.rows[0].id,
             shortUrl: shortUrl
         };
 
         await db.query(
             `
-                INSERT INTO "urlsVisit" ("shortUrl", score)
-                Values ($1, $2)
+                INSERT INTO "urlsVisit" ("userId", "shortUrl", score)
+                Values ($1, $2, $3)
             `,
-            [shortUrl, 0]
+            [sessionTest.rows[0].userId, shortUrl, 0]
         );
 
         res.status(201).send(urlBody);
@@ -256,6 +248,57 @@ app.get("/urls/open/:shortUrl", async(req, res) => {
         );
 
         res.redirect(getUrl.rows[0].url);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
+
+app.delete("/urls/:id", async(req, res) => {
+    const { id } = req.params;
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "");
+
+    if(!token) return res.sendStatus(401);
+
+    try{
+        const sessionTest = await db.query(
+            `
+                SELECT * FROM sessions WHERE token = $1
+            `,
+            [token]
+        );
+
+        if(sessionTest.rowCount === 0) return res.sendStatus(401);
+
+        const getUrl = await db.query(
+            `
+                SELECT * FROM urls WHERE id = $1
+            `,
+            [id]
+        );
+
+        if(getUrl.rowCount === 0) return res.sendStatus(404);
+
+        if(sessionTest.rows[0].userId !== getUrl.rows[0].userId){
+            return res.sendStatus(401);
+        }
+
+        await db.query(
+            `
+                DELETE FROM urls WHERE id = $1
+            `,
+            [id]
+        );
+
+        await db.query(
+            `
+                DELETE FROM "urlsVisit" WHERE "shortUrl" = $1
+            `,
+            [getUrl.rows[0].shortUrl]
+        );
+
+        res.sendStatus(204);
     }
     catch(error){
         res.status(500).send(error.message);
