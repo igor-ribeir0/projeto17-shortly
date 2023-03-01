@@ -12,7 +12,7 @@ import { nanoid } from "nanoid";
   "email": "razer@gg.com",
   "password": "razer",
   "confirmPassword": "razer"
-  "token": "3c7a3b7b-8c64-4304-bf95-fa82d2f599c7"
+  "token": "19ed9862-5c37-4db9-a94d-d25754b613a7"
 }
 */
 
@@ -185,6 +185,14 @@ app.post("/urls/shorten", async(req, res) => {
             shortUrl: shortUrl
         };
 
+        await db.query(
+            `
+                INSERT INTO "urlsVisit" ("shortUrl", score)
+                Values ($1, $2)
+            `,
+            [shortUrl, 0]
+        );
+
         res.status(201).send(urlBody);
     }
     catch(error){
@@ -212,6 +220,42 @@ app.get("/urls/:id", async(req, res) => {
         };
 
         res.status(200).send(urlBody);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
+
+app.get("/urls/open/:shortUrl", async(req, res) => {
+    const { shortUrl } = req.params;
+
+    try{
+        const shortUrlExist = await db.query(
+            `
+                SELECT * FROM "urlsVisit" WHERE "shortUrl" = $1
+            `,
+            [shortUrl]
+        );
+
+        if(shortUrlExist.rowCount === 0) return res.sendStatus(404);
+
+        await db.query(
+            `
+                UPDATE "urlsVisit"
+                SET score = $1
+                WHERE "shortUrl" = $2
+            `,
+            [shortUrlExist.rows[0].score + 1, shortUrl]
+        );
+
+        const getUrl = await db.query(
+            `
+                SELECT * FROM urls WHERE "shortUrl" = $1
+            `,
+            [shortUrl]
+        );
+
+        res.redirect(getUrl.rows[0].url);
     }
     catch(error){
         res.status(500).send(error.message);
