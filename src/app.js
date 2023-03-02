@@ -8,11 +8,11 @@ import { v4 as uuid } from 'uuid';
 import { nanoid } from "nanoid";
 
 /*{
-  "name": "Razer",
-  "email": "razer@gg.com",
-  "password": "razer",
-  "confirmPassword": "razer"
-  "token": "19ed9862-5c37-4db9-a94d-d25754b613a7"
+  "name": "Beatles",
+  "email": "beatles@gg.com",
+  "password": "beatles",
+  "confirmPassword": "beatles"
+  "token": "cbfad55e-2a4e-4d78-8fa7-f69a32106cfd"
 }
 */
 
@@ -116,10 +116,10 @@ app.post("/signUp", async(req, res) => {
 
         await db.query(
             `
-                INSERT INTO users (name, email, password)
-                VALUES ($1, $2, $3)
+                INSERT INTO users (name, email, password, "visitCount")
+                VALUES ($1, $2, $3, $4)
             `,
-            [name, email, hash]
+            [name, email, hash, 0]
         );
 
         res.sendStatus(201);
@@ -159,10 +159,10 @@ app.post("/urls/shorten", async(req, res) => {
 
         await db.query(
             `
-                INSERT INTO urls ("userId", url, "shortUrl")
-                VALUES ($1, $2, $3)
+                INSERT INTO urls ("userId", url, "shortUrl", score)
+                VALUES ($1, $2, $3, $4)
             `,
-            [sessionTest.rows[0].userId, url, shortUrl]
+            [sessionTest.rows[0].userId, url, shortUrl, 0]
         );
 
         const getUrl = await db.query(
@@ -176,14 +176,6 @@ app.post("/urls/shorten", async(req, res) => {
             id: getUrl.rows[0].id,
             shortUrl: shortUrl
         };
-
-        await db.query(
-            `
-                INSERT INTO "urlsVisit" ("userId", "shortUrl", score)
-                Values ($1, $2, $3)
-            `,
-            [sessionTest.rows[0].userId, shortUrl, 0]
-        );
 
         res.status(201).send(urlBody);
     }
@@ -224,7 +216,7 @@ app.get("/urls/open/:shortUrl", async(req, res) => {
     try{
         const shortUrlExist = await db.query(
             `
-                SELECT * FROM "urlsVisit" WHERE "shortUrl" = $1
+                SELECT * FROM urls WHERE "shortUrl" = $1
             `,
             [shortUrl]
         );
@@ -233,21 +225,30 @@ app.get("/urls/open/:shortUrl", async(req, res) => {
 
         await db.query(
             `
-                UPDATE "urlsVisit"
+                UPDATE urls
                 SET score = $1
                 WHERE "shortUrl" = $2
             `,
             [shortUrlExist.rows[0].score + 1, shortUrl]
         );
 
-        const getUrl = await db.query(
+        const getUser = await db.query(
             `
-                SELECT * FROM urls WHERE "shortUrl" = $1
+                SELECT * FROM users WHERE id = $1
             `,
-            [shortUrl]
+            [shortUrlExist.rows[0].userId]
         );
 
-        res.redirect(getUrl.rows[0].url);
+        await db.query(
+            `
+                UPDATE users
+                SET "visitCount" = $1
+                WHERE id = $2
+            `,
+            [getUser.rows[0].visitCount + 1, getUser.rows[0].id]
+        );
+
+        res.redirect(shortUrlExist.rows[0].url);
     }
     catch(error){
         res.status(500).send(error.message);
@@ -291,14 +292,54 @@ app.delete("/urls/:id", async(req, res) => {
             [id]
         );
 
-        await db.query(
+        res.sendStatus(204);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
+
+app.get("/users/me", async(req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "");
+
+    if(!token) return res.sendStatus(401);
+
+    try{
+        const sessionTest = await db.query(
             `
-                DELETE FROM "urlsVisit" WHERE "shortUrl" = $1
+                SELECT * FROM sessions WHERE token = $1
             `,
-            [getUrl.rows[0].shortUrl]
+            [token]
         );
 
-        res.sendStatus(204);
+        if(sessionTest.rowCount === 0) return res.sendStatus(401);
+
+        const getUser = await db.query(
+            `
+                SELECT * FROM users WHERE id = $1
+            `,
+            [sessionTest.rows[0].userId]
+        );
+
+        const userData = await db.query(
+            `
+                SELECT users.id, users.name, users."visitCount",
+                json_build_object(
+                    'id', urls.id,
+                    'shortUrl', urls."shortUrl",
+                    'url', urls.url,
+                    'visitCount', urls.score
+                )  AS "shortenedUrls"
+                FROM users
+                JOIN urls
+                    ON urls."userId" = users.id
+                WHERE urls."userId" = $1
+            `,
+            [getUser.rows[0].id]
+        );
+
+        res.status(200).send(userData.rows);
     }
     catch(error){
         res.status(500).send(error.message);
