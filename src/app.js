@@ -116,7 +116,7 @@ app.post("/signUp", async(req, res) => {
 
         await db.query(
             `
-                INSERT INTO users (name, email, password, "visitCount")
+                INSERT INTO users (name, email, password, score)
                 VALUES ($1, $2, $3, $4)
             `,
             [name, email, hash, 0]
@@ -242,10 +242,10 @@ app.get("/urls/open/:shortUrl", async(req, res) => {
         await db.query(
             `
                 UPDATE users
-                SET "visitCount" = $1
+                SET score = $1
                 WHERE id = $2
             `,
-            [getUser.rows[0].visitCount + 1, getUser.rows[0].id]
+            [getUser.rows[0].score + 1, getUser.rows[0].id]
         );
 
         res.redirect(shortUrlExist.rows[0].url);
@@ -332,7 +332,7 @@ app.get("/users/me", async(req, res) => {
         const returnObj = {
             id: getUser.rows[0].id,
             name: getUser.rows[0].name,
-            visitCount: getUser.rows[0].visitCount,
+            visitCount: getUser.rows[0].score,
             shortenedUrls: getUrls.rows
         };
 
