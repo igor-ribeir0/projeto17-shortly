@@ -159,7 +159,7 @@ app.post("/urls/shorten", async(req, res) => {
 
         await db.query(
             `
-                INSERT INTO urls ("userId", url, "shortUrl", score)
+                INSERT INTO urls ("userId", url, "shortUrl", "visitCount")
                 VALUES ($1, $2, $3, $4)
             `,
             [sessionTest.rows[0].userId, url, shortUrl, 0]
@@ -226,10 +226,10 @@ app.get("/urls/open/:shortUrl", async(req, res) => {
         await db.query(
             `
                 UPDATE urls
-                SET score = $1
+                SET "visitCount" = $1
                 WHERE "shortUrl" = $2
             `,
-            [shortUrlExist.rows[0].score + 1, shortUrl]
+            [shortUrlExist.rows[0].visitCount + 1, shortUrl]
         );
 
         const getUser = await db.query(
@@ -317,7 +317,7 @@ app.get("/users/me", async(req, res) => {
 
         const getUrls = await db.query(
             `
-            SELECT "id", "shortUrl", "url", "score" FROM urls WHERE "userId" = $1
+            SELECT "id", "shortUrl", "url", "visitCount" FROM urls WHERE "userId" = $1
             `,
             [sessionTest.rows[0].userId]
         );
