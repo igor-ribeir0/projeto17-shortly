@@ -357,7 +357,7 @@ app.get("/ranking", async(req, res) => {
             `
         );
 
-        res.status(200).send(ranking.rows);
+        return res.status(200).send(ranking.rows);
     }
     catch(error){
         res.status(500).send(error.message);
