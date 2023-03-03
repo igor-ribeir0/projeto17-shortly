@@ -342,3 +342,24 @@ app.get("/users/me", async(req, res) => {
         res.status(500).send(error.message);
     }
 });
+
+app.get("/ranking", async(req, res) => {
+    try{
+        const ranking = await db.query(
+            `
+                SELECT users.id, users.name, 
+                CAST(COUNT (urls.id) AS INTEGER) AS "linksCount",
+                CAST(COALESCE(SUM("visitCount"), 0) AS INTEGER) as "visitCount"
+                FROM users LEFT JOIN urls on users.id = urls."userId"
+                GROUP BY users.id, users.name
+                ORDER BY "visitCount" DESC
+                LIMIT 10
+            `
+        );
+
+        res.status(200).send(ranking.rows);
+    }
+    catch(error){
+        res.status(500).send(error.message);
+    }
+});
