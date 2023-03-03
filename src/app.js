@@ -315,6 +315,13 @@ app.get("/users/me", async(req, res) => {
 
         if(sessionTest.rowCount === 0) return res.sendStatus(401);
 
+        const getUrls = await db.query(
+            `
+            SELECT "id", "shortUrl", "url", "score" FROM urls WHERE "userId" = $1
+            `,
+            [sessionTest.rows[0].userId]
+        );
+
         const getUser = await db.query(
             `
                 SELECT * FROM users WHERE id = $1
@@ -322,24 +329,14 @@ app.get("/users/me", async(req, res) => {
             [sessionTest.rows[0].userId]
         );
 
-        const userData = await db.query(
-            `
-                SELECT users.id, users.name, users."visitCount",
-                json_build_object(
-                    'id', urls.id,
-                    'shortUrl', urls."shortUrl",
-                    'url', urls.url,
-                    'visitCount', urls.score
-                )  AS "shortenedUrls"
-                FROM users
-                JOIN urls
-                    ON urls."userId" = users.id
-                WHERE urls."userId" = $1
-            `,
-            [getUser.rows[0].id]
-        );
+        const returnObj = {
+            id: getUser.rows[0].id,
+            name: getUser.rows[0].name,
+            visitCount: getUser.rows[0].visitCount,
+            shortenedUrls: getUrls.rows
+        };
 
-        res.status(200).send(userData.rows);
+        res.status(200).send(returnObj);
     }
     catch(error){
         res.status(500).send(error.message);
